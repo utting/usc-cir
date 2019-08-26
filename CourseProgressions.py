@@ -50,7 +50,7 @@
 
 # ## Parameters and Settings
 
-# In[1]:
+# In[2]:
 
 
 ELECTIVE_PREFIX = "Elective"
@@ -59,7 +59,7 @@ COURSES_NEEDED = 24  # for a three-year degree
 MAX_SEMESTERS = 10   # for full-time students
 
 
-# In[2]:
+# In[3]:
 
 
 import csv
@@ -67,7 +67,7 @@ import sys
 from typing import Set, List, Dict
 
 
-# In[3]:
+# In[4]:
 
 
 import pandas as pd
@@ -76,7 +76,7 @@ import numpy as np
 
 # ## Code for Reading Student Records
 
-# In[4]:
+# In[5]:
 
 
 passing = {"PS", "CR", "DN", "HD", "PU", "SP", "EX", "XC"}
@@ -92,7 +92,7 @@ def pass_grade(grade:str) -> bool:
     return False
 
 
-# In[5]:
+# In[6]:
 
 
 class Student:
@@ -117,7 +117,7 @@ class Student:
         return "{} {} {}".format(self.id, self.first, self.last)
 
 
-# In[6]:
+# In[7]:
 
 
 def read_students(filename:str) -> List[Student]:
@@ -149,7 +149,7 @@ def read_students(filename:str) -> List[Student]:
     return students
 
 
-# In[7]:
+# In[8]:
 
 
 stu = read_students("Dummy student details.xlsx")
@@ -159,6 +159,65 @@ assert stu[0].last == "Christmas"
 assert len(stu[0].passed) == 8
 assert "BUS101" in stu[0].passed
 assert "ICT112" in stu[0].passed
+
+
+# ## Code for Handling Prerequisites
+
+# In[33]:
+
+
+class PreReq:
+    def __init__(self, checks:List[str], num=0):
+        """Create a prerequisite check.
+        Each entry in checks can be either a course code (str)
+        or one of these PreReq objects.
+        'num' is the number of checks that must be satisfied.
+        So num=1 means 'one-of...', and num=3 means 'at least 3 of ...'.
+        The default is num=0, which is a shortcut for len(checks)
+        which means 'all-of...'.
+        """
+        self.checks = checks
+        if num > 0:
+            self.num_required = num
+        else:
+            self.num_required = len(checks)
+        
+    def is_satisfied(self, done:Set[str]) -> bool:
+        num = 0
+        for chk in self.checks:
+            if isinstance(chk, str):
+                if chk in done:
+                    num += 1
+            elif isinstance(chk, PreReq):
+                if chk.is_satisfied(done):
+                    num += 1
+            else:
+                print("WARNING: unknown prereq ignored: " + chk)
+        return num >= self.num_required
+    
+def test_prereqs():
+    done = set(["ICT110", "ICT112", "ICT115", "ICT120"])
+    pre1 = PreReq(["ICT110"])
+    assert pre1.is_satisfied(set()) == False
+    assert pre1.is_satisfied(done) == True
+    # all-of (a and b and c)
+    pre2 = PreReq(["ICT112", "ICT115", "ICT221"])
+    assert pre2.is_satisfied(done) == False
+    done2 = done.union(set(["ICT221"]))
+    assert pre2.is_satisfied(done2) == True
+    # one-of (a or b or c)
+    pre3 = PreReq(["ICT112", "ICT115", "ICT221"], 1)
+    assert pre3.is_satisfied(set()) == False
+    assert pre3.is_satisfied(done) == True
+    assert pre3.is_satisfied(set(["ICT221"])) == True
+    # at least three of ... (like ICT342 pre-req)
+    pre3 = PreReq(["ICT301", "ICT310", "ICT311", "ICT320",
+                   "ICT321", "ICT351", "ICT352"], 3)
+    assert pre3.is_satisfied(done) == False
+    assert pre3.is_satisfied(set(["ICT301", "ICT321"])) == False
+    assert pre3.is_satisfied(set(["ICT301", "ICT321", "ICT351"])) == True
+
+test_prereqs()
 
 
 # ## Code for Reading Programs / Majors / Minors with CPVs
@@ -365,7 +424,7 @@ assert level("ABC234") == 2
 assert level(ELECTIVE_PREFIX + "321") == 3
 
 
-# In[37]:
+# In[15]:
 
 
 def get_rank(code, program) -> int:
@@ -385,7 +444,7 @@ assert get_rank("SCI113", bbm_program) == 1  # with CPV=1.130
 assert get_rank("LFS100", bbm_program) == 2  # with CPV=1.130
 
 
-# In[56]:
+# In[16]:
 
 
 def pretty(codes:Set[str], program:List[Course]=[]) -> str:
@@ -415,7 +474,7 @@ assert pretty(set(["LFS100", "COR109"]), bbm_program) == "COR109  LFS100"
 assert pretty(set(["LFS100", "COR109", "SCI113"]), bbm_program) == "COR109  SCI113 =LFS100"
 
 
-# In[57]:
+# In[17]:
 
 
 def is_allowed(course:Course, done:Set[str], semester:int, program:List[Course]=[]) -> bool:
@@ -466,7 +525,7 @@ assert is_allowed(Course("Elective201", "", 3.0), set(["ABC10"+i for i in "123"]
 assert is_allowed(Course("Elective201", "", 3.0), set(["ABC10"+i for i in "1234"]), 1, bbm_program) == False
 
 
-# In[58]:
+# In[18]:
 
 
 def plan_student_old(stu:Student, programs:Dict[str,List], output=sys.stdout):
@@ -507,7 +566,7 @@ def plan_student_old(stu:Student, programs:Dict[str,List], output=sys.stdout):
             sem = 1
 
 
-# In[59]:
+# In[19]:
 
 
 def remove_done(progression, done:Set[str]) -> List[Course]:
@@ -515,7 +574,7 @@ def remove_done(progression, done:Set[str]) -> List[Course]:
     return [c for c in progression if not c.is_done(done)]
 
 
-# In[60]:
+# In[20]:
 
 
 def allocate_elective(elective:Course, done:Set[str]) -> str:
@@ -534,7 +593,7 @@ assert allocate_elective(e, set(["ABC123", "ABC234"])) == "ABC123"
 assert allocate_elective(e, set(["ABC323", "ABC234", "ABC333"])) == "ABC234" # the lowest level one
 
 
-# In[61]:
+# In[21]:
 
 
 def finished(progression, done:Set[str]) -> bool:
@@ -542,7 +601,7 @@ def finished(progression, done:Set[str]) -> bool:
     return len(done) >= COURSES_NEEDED and all([c.is_elective() for c in progression])
 
 
-# In[62]:
+# In[22]:
 
 
 # simple 'AND' pre-reqs
@@ -560,7 +619,7 @@ and_prereqs = {
 }
 
 
-# In[63]:
+# In[23]:
 
 
 def prereqs_met(course:Course, done:Set[str]) -> bool:
@@ -580,7 +639,7 @@ assert prereqs_met(csc301, set(["ICT311"])) == False
 assert prereqs_met(csc301, set(["DES222", "ICT311"])) == True
 
 
-# In[69]:
+# In[24]:
 
 
 def plan_student(stu:Student, progression:List[Course], semester:int, output=sys.stdout):
@@ -639,7 +698,7 @@ def plan_student(stu:Student, progression:List[Course], semester:int, output=sys
 
 # ### Example BICT Students
 
-# In[65]:
+# In[25]:
 
 
 # Some BICT test cases (choose one of the following majors)
@@ -669,7 +728,7 @@ for s in [s1,s2,s3,s4]:
 
 # ### Example BSc Students
 
-# In[66]:
+# In[26]:
 
 
 prog = whole_program(bsc, ["BSc", "Biology major", "Genetics minor"])
@@ -678,7 +737,7 @@ for start_semester in [1, 2]:
     plan_student(s, prog, start_semester)
 
 
-# In[67]:
+# In[27]:
 
 
 # Analyse all combinations of 1 major + 1 minor.
@@ -693,7 +752,7 @@ for major in bsc_majors:
 
 # ## Analyse some real students
 
-# In[68]:
+# In[28]:
 
 
 stu_bict = read_students("BICT full list.xlsx")
